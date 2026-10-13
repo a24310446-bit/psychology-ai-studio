@@ -1,0 +1,16 @@
+
+name: Psychology AI Generator
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get repository
+        uses: actions/checkout@v4
+
+      - name: Confirm manual start
+        run: echo "Manual start successful!"
