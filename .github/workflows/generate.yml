@@ -14,12 +14,13 @@ concurrency:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Get repository
         uses: actions/checkout@v7
 
-      - name: Set up JavaScript
+      - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -28,15 +29,42 @@ jobs:
       - name: Search psychology research
         run: node generate.mjs
 
-      - name: Save research file
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+
+          if ! curl -fsS http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
+            OLLAMA_MAX_LOADED_MODELS=1 ollama serve > /tmp/ollama.log 2>&1 &
+          fi
+
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          cat /tmp/ollama.log || true
+          exit 1
+
+      - name: Download AI models
+        run: |
+          ollama pull qwen2.5:1.5b
+          ollama pull gemma3:1b
+
+      - name: Generate and review Japanese content
+        run: node ai-review.mjs
+
+      - name: Save results
         uses: actions/upload-artifact@v7
         with:
-          name: psychology-research-${{ github.run_number }}
-          path: output/research.json
+          name: psychology-ai-${{ github.run_number }}
+          path: output/
           if-no-files-found: error
           retention-days: 30
 
-      - name: Save used topic history
+      - name: Save research history
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -44,8 +72,8 @@ jobs:
           git add history/used_topics.json
 
           if git diff --cached --quiet; then
-            echo "No new history to save"
+            echo "No changes"
           else
-            git commit -m "Save used psychology topic"
+            git commit -m "Save psychology research history"
             git push origin HEAD:main
           fi
